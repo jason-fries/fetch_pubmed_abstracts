@@ -1,17 +1,23 @@
 """ Simple example script for bulk downloading PubMed abstacts using BioPython and eFetch.
 Entrez reqires setting and email before use and (optionally) and api_key for heavy querying.
+
+Example usage
+
+python fetch_pmids.py \
+--input pmids.txt \
+--outdir documents/ \
+--email "XXXX@XXXXX" \
+--api_key "XXXXXXXXXXX"
+
 """
 from typing import List
 import os
 import time
 import json
 from tqdm import tqdm
+import pandas as pd
 from Bio import Entrez
-
-
-Entrez.email = "<YOUR_EMAIL_HERE>"
-# see https://ncbiinsights.ncbi.nlm.nih.gov/2017/11/02/new-api-keys-for-the-e-utilities/
-# Entrez.api_key = "XXXXXXXXXXXXXXXX"
+import argparse
 
 
 def fetch_pubmed_abstracts(
@@ -54,17 +60,43 @@ def fetch_pubmed_abstracts(
             file.write(json.dumps(record, indent=2))
 
 
-# sample PMIDs
-document_ids = [
-    "18435798",
-    "27027316",
-    "18668432",
-    "22298808",
-    "19509253",
-    "24571714",
-    "15852660",
-    "24209620",
-    "27585851",
-    "16188502",
-]
-fetch_pubmed_abstracts(document_ids, ".pubmed_data/")
+if __name__ == "__main__":
+
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--input", type=str, help="PMID list", required=True)
+    parser.add_argument("--outdir", type=str, help="output dir", required=True)
+    parser.add_argument("--email", type=str, help="email address", required=True)
+    parser.add_argument("--api_key", type=str, help="API key")
+    parser.add_argument("--batch_size", type=int, default=500, help="batch size")
+    args = parser.parse_args()
+
+    # see https://ncbiinsights.ncbi.nlm.nih.gov/2017/11/02/new-api-keys-for-the-e-utilities/
+    Entrez.email = args.email
+    Entrez.api_key = args.api_key
+
+    assert os.path.exists(args.input)
+    if not os.path.exists(args.outdir):
+        print(f"Creating {args.outdir}")
+        os.mkdir(args.outdir)
+
+    df = pd.read_csv(args.input, header=None, names=["pmid"], dtype={"pmid": str})
+    pmids = df.pmid.to_list()
+    print(f"File contains {len(pmids)} PMIDs")
+    # with/without API key: 3 reqs per/second vs 10 reqs per/second
+    delay = 0.15 if args.api_key is not None else 0.33
+
+    fetch_pubmed_abstracts(pmids, args.outdir, args.batch_size, delay)
+
+# # sample PMIDs
+# document_ids = [
+#     "18435798",
+#     "27027316",
+#     "18668432",
+#     "22298808",
+#     "19509253",
+#     "24571714",
+#     "15852660",
+#     "24209620",
+#     "27585851",
+#     "16188502",
+# ]
